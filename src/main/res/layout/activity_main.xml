@@ -62,6 +62,28 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
 
+            <!-- Player 1 音量控制 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_volume_up"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="8dp" />
+
+                <SeekBar
+                    android:id="@+id/player1_volume_bar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.2"
+                    android:layout_gravity="center_vertical" />
+            </LinearLayout>
+
             <!-- Player 1 控制按钮 -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -69,42 +91,59 @@
                 android:orientation="horizontal"
                 android:layout_marginTop="8dp">
 
-                <Button
-                    android:id="@+id/player1_btn_select"
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginEnd="2dp"
-                    android:text="选择P1" />
+                    android:orientation="horizontal">
 
-                <Button
-                    android:id="@+id/player1_btn_play_pause"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:text="播放"
-                    android:backgroundTint="#4CAF50" />
+                    <ImageButton
+                        android:id="@+id/player1_btn_select"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_folder_open"
+                        android:background="@drawable/button_background_selector" />
 
-                <Button
-                    android:id="@+id/player1_btn_loop"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:text="循环: 开"
-                    android:backgroundTint="#E0E0E0" />
+                    <ImageButton
+                        android:id="@+id/player1_btn_play_pause"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_play_arrow"
+                        android:background="@drawable/play_button_background_selector" />
 
-                <Button
-                    android:id="@+id/player1_btn_device"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:text="设备: 默认"
-                    android:backgroundTint="#E0E0E0" />
+                    <ImageButton
+                        android:id="@+id/player1_btn_loop"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_loop"
+                        android:background="@drawable/loop_button_background_selector" />
+
+                    <Button
+                        android:id="@+id/player1_btn_device"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:minWidth="82dp"
+                        android:layout_marginStart="4dp"
+                        android:text="请选择"
+                        android:drawableLeft="@drawable/ic_audio_device"
+                        android:drawablePadding="4dp"
+                        android:background="@drawable/button_background_selector" />
+
+                    <!-- Player 1 音量控制滑块放在按钮行 -->
+                    <SeekBar
+                        android:id="@+id/player1_volume_bar_inline"
+                        android:layout_width="100dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="8dp"
+                        android:max="100" />
+
+                </LinearLayout>
 
             </LinearLayout>
 
@@ -144,6 +183,28 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp" />
 
+            <!-- Player 2 音量控制 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:layout_marginTop="8dp">
+
+                <ImageView
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:src="@drawable/ic_volume_up"
+                    android:layout_gravity="center_vertical"
+                    android:layout_marginEnd="8dp" />
+
+                <SeekBar
+                    android:id="@+id/player2_volume_bar"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1.2"
+                    android:layout_gravity="center_vertical" />
+            </LinearLayout>
+
             <!-- Player 2 控制按钮 -->
             <LinearLayout
                 android:layout_width="match_parent"
@@ -151,42 +212,59 @@
                 android:orientation="horizontal"
                 android:layout_marginTop="8dp">
 
-                <Button
-                    android:id="@+id/player2_btn_select"
+                <LinearLayout
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:layout_marginEnd="2dp"
-                    android:text="选择P2" />
+                    android:orientation="horizontal">
 
-                <Button
-                    android:id="@+id/player2_btn_play_pause"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:text="播放"
-                    android:backgroundTint="#4CAF50" />
+                    <ImageButton
+                        android:id="@+id/player2_btn_select"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_folder_open"
+                        android:background="@drawable/button_background_selector" />
 
-                <Button
-                    android:id="@+id/player2_btn_loop"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:layout_marginEnd="2dp"
-                    android:text="循环: 开"
-                    android:backgroundTint="#E0E0E0" />
+                    <ImageButton
+                        android:id="@+id/player2_btn_play_pause"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_play_arrow"
+                        android:background="@drawable/play_button_background_selector" />
 
-                <Button
-                    android:id="@+id/player2_btn_device"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="2dp"
-                    android:text="设备: 默认"
-                    android:backgroundTint="#E0E0E0" />
+                    <ImageButton
+                        android:id="@+id/player2_btn_loop"
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginEnd="4dp"
+                        android:src="@drawable/ic_loop"
+                        android:background="@drawable/loop_button_background_selector" />
+
+                    <Button
+                        android:id="@+id/player2_btn_device"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:minWidth="82dp"
+                        android:layout_marginStart="4dp"
+                        android:text="请选择"
+                        android:drawableLeft="@drawable/ic_audio_device"
+                        android:drawablePadding="4dp"
+                        android:background="@drawable/button_background_selector" />
+
+                    <!-- Player 2 音量控制滑块放在按钮行 -->
+                    <SeekBar
+                        android:id="@+id/player2_volume_bar_inline"
+                        android:layout_width="100dp"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:layout_marginStart="8dp"
+                        android:max="100" />
+
+                </LinearLayout>
 
             </LinearLayout>
 

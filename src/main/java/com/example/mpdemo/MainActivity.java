@@ -23,10 +23,13 @@ import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.media.AudioAttributes;
 import android.media.AudioDeviceInfo;
 import android.media.AudioManager;
+import android.media.MediaMetadataRetriever;
 import android.media.MediaPlayer;
 import android.net.Uri;
 import android.os.Build;
@@ -34,12 +37,14 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
-import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
+import android.widget.ImageButton;
+import android.widget.ImageView;
 import android.widget.MediaController;
 import android.widget.SeekBar;
+import android.widget.Toast;
 import androidx.annotation.NonNull;
 import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AppCompatActivity;
@@ -47,6 +52,7 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -57,30 +63,42 @@ public class MainActivity extends AppCompatActivity {
 
     // Player 1
     private CustomVideoView player1VideoView;
+    private ImageView player1AlbumArt;         // 专辑封面ImageView
+    private RecordView player1RecordView;      // 黑胶唱片View
     private SeekBar player1SeekBar;
+    private SeekBar player1VolumeBar; // 音量控制条
     private MediaPlayer player1MediaPlayer;
     private Uri player1CurrentMediaUri;
     private AudioDeviceInfo player1SelectedDevice;
     private boolean isPlayer1Playing = false; // 是否Player1正在播放
+    private boolean player1IsPrepared = false; // Player1是否已准备好
+    private boolean player2IsPrepared = false; // Player2是否已准备好
 
     // Player 2
     private CustomVideoView player2VideoView;
+    private ImageView player2AlbumArt;         // 专辑封面ImageView
+    private RecordView player2RecordView;      // 黑胶唱片View
     private SeekBar player2SeekBar;
+    private SeekBar player2VolumeBar; // 音量控制条
     private MediaPlayer player2MediaPlayer;
     private Uri player2CurrentMediaUri;
     private AudioDeviceInfo player2SelectedDevice;
     private boolean isPlayer2Playing = false; // 是否Player2正在播放
 
+    // 添加音量存储变量
+    private int player1Volume = 100; // 默认音量100%
+    private int player2Volume = 100; // 默认音量100%
+
     // Player 1 控制按钮
-    private Button player1SelectButton;
-    private Button player1PlayPauseButton;
-    private Button player1LoopButton;
+    private ImageButton player1SelectButton;
+    private ImageButton player1PlayPauseButton;
+    private ImageButton player1LoopButton;
     private Button player1DeviceButton;
 
     // Player 2 控制按钮
-    private Button player2SelectButton;
-    private Button player2PlayPauseButton;
-    private Button player2LoopButton;
+    private ImageButton player2SelectButton;
+    private ImageButton player2PlayPauseButton;
+    private ImageButton player2LoopButton;
     private Button player2DeviceButton;
 
     private MediaController player1MediaController;
@@ -106,12 +124,12 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // 首先初始化AudioManager，避免后续使用时为null
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+
         initViews();
         setupClickListeners();
         checkPermission();
-
-        // 初始化AudioManager用于获取设备列表
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
 
         // 初始化进度条更新任务
         updateSeekBars = new Runnable() {
@@ -124,18 +142,32 @@ public class MainActivity extends AppCompatActivity {
                 handler.postDelayed(this, 1000); // 每秒更新一次
             }
         };
+
+        // 初始化播放按钮图标
+        if (player1PlayPauseButton != null) {
+            player1PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+        }
+        if (player2PlayPauseButton != null) {
+            player2PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+        }
     }
 
     private void initViews() {
         // 初始化Player 1组件
         player1VideoView = findViewById(R.id.player1_video_view);
+        player1AlbumArt = findViewById(R.id.player1_album_art); // 初始化专辑封面ImageView
+        player1RecordView = findViewById(R.id.player1_record_view); // 初始化黑胶唱片View
         player1SeekBar = findViewById(R.id.player1_seek_bar);
+        player1VolumeBar = findViewById(R.id.player1_volume_bar); // 初始化音量控制条
         player1MediaController = new MediaController(this);
         player1VideoView.setMediaController(player1MediaController);
 
         // 初始化Player 2组件
         player2VideoView = findViewById(R.id.player2_video_view);
+        player2AlbumArt = findViewById(R.id.player2_album_art); // 初始化专辑封面ImageView
+        player2RecordView = findViewById(R.id.player2_record_view); // 初始化黑胶唱片View
         player2SeekBar = findViewById(R.id.player2_seek_bar);
+        player2VolumeBar = findViewById(R.id.player2_volume_bar); // 初始化音量控制条
         player2MediaController = new MediaController(this);
         player2VideoView.setMediaController(player2MediaController);
 
@@ -150,6 +182,50 @@ public class MainActivity extends AppCompatActivity {
         player2PlayPauseButton = findViewById(R.id.player2_btn_play_pause);
         player2LoopButton = findViewById(R.id.player2_btn_loop);
         player2DeviceButton = findViewById(R.id.player2_btn_device);
+
+        // 设置Player 1音量条
+        if (player1VolumeBar != null) {
+            player1VolumeBar.setMax(100);
+            // 设置为之前保存的音量值
+            player1VolumeBar.setProgress(player1Volume);
+
+            player1VolumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    if (fromUser) {
+                        setDeviceVolumeForPlayer(1, progress);
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {}
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+
+        // 设置Player 2音量条
+        if (player2VolumeBar != null) {
+            player2VolumeBar.setMax(100);
+            // 设置为之前保存的音量值
+            player2VolumeBar.setProgress(player2Volume);
+
+            player2VolumeBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    if (fromUser) {
+                        setDeviceVolumeForPlayer(2, progress);
+                    }
+                }
+
+                @Override
+                public void onStartTrackingTouch(SeekBar seekBar) {}
+
+                @Override
+                public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
 
         // 设置Player 1进度条监听器
         player1SeekBar.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
@@ -224,6 +300,36 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // 设置播放器音量
+    private void setDeviceVolumeForPlayer(int playerNumber, int volumePercent) {
+        // 直接使用MediaPlayer.setVolume方法设置音量
+        float volume = volumePercent / 100.0f;
+
+        if (playerNumber == 1) {
+            if (player1MediaPlayer != null) {
+                player1MediaPlayer.setVolume(volume, volume);
+                Log.d("MPDemo", "Player 1 音量设置为: " + volumePercent + "%");
+            } else if (player1VideoView != null) {
+                // 使用CustomVideoView的setVideoVolume方法设置音量
+                player1VideoView.setVideoVolume(volume);
+                Log.d("MPDemo", "Player 1 (VideoView) 音量设置为: " + volumePercent + "%");
+            }
+            // 保存Player1的音量值
+            player1Volume = volumePercent;
+        } else if (playerNumber == 2) {
+            if (player2MediaPlayer != null) {
+                player2MediaPlayer.setVolume(volume, volume);
+                Log.d("MPDemo", "Player 2 音量设置为: " + volumePercent + "%");
+            } else if (player2VideoView != null) {
+                // 使用CustomVideoView的setVideoVolume方法设置音量
+                player2VideoView.setVideoVolume(volume);
+                Log.d("MPDemo", "Player 2 (VideoView) 音量设置为: " + volumePercent + "%");
+            }
+            // 保存Player2的音量值
+            player2Volume = volumePercent;
+        }
+    }
+
     private void setupClickListeners() {
         // Player 1 按钮点击事件
         if (player1SelectButton != null) {
@@ -279,11 +385,11 @@ public class MainActivity extends AppCompatActivity {
     private void updatePlayer1LoopButtonState() {
         if (player1LoopButton != null) {
             if (isPlayer1Looping) {
-                player1LoopButton.setText(R.string.loop_on);
-                player1LoopButton.setBackgroundColor(Color.parseColor("#4CAF50")); // 绿色表示开启
+                // 设置按钮为激活循环状态
+                player1LoopButton.setSelected(true);
             } else {
-                player1LoopButton.setText(R.string.loop_off);
-                player1LoopButton.setBackgroundColor(Color.GRAY); // 灰色表示关闭
+                // 设置按钮为非循环状态
+                player1LoopButton.setSelected(false);
             }
         }
     }
@@ -291,11 +397,11 @@ public class MainActivity extends AppCompatActivity {
     private void updatePlayer2LoopButtonState() {
         if (player2LoopButton != null) {
             if (isPlayer2Looping) {
-                player2LoopButton.setText(R.string.loop_on);
-                player2LoopButton.setBackgroundColor(Color.parseColor("#4CAF50")); // 绿色表示开启
+                // 设置按钮为激活循环状态
+                player2LoopButton.setSelected(true);
             } else {
-                player2LoopButton.setText(R.string.loop_off);
-                player2LoopButton.setBackgroundColor(Color.GRAY); // 灰色表示关闭
+                // 设置按钮为非循环状态
+                player2LoopButton.setSelected(false);
             }
         }
     }
@@ -305,8 +411,7 @@ public class MainActivity extends AppCompatActivity {
             // 获取可用的音频输出设备
             List<AudioDeviceInfo> devices = getAvailableOutputDevices();
 
-            if (devices.isEmpty() && player1DeviceButton != null) {
-                player1DeviceButton.setText(R.string.device_default);
+            if (devices.isEmpty()) {
                 return;
             }
 
@@ -326,7 +431,8 @@ public class MainActivity extends AppCompatActivity {
                        public void onClick(DialogInterface dialog, int which) {
                            player1SelectedDevice = deviceArray[which];
                            if (player1DeviceButton != null) {
-                               player1DeviceButton.setText("设备: " + getDeviceName(player1SelectedDevice));
+                               player1DeviceButton.setText(getDeviceName(player1SelectedDevice));
+                               player1DeviceButton.setContentDescription("设备: " + getDeviceName(player1SelectedDevice));
                            }
 
                            // 应用到Player 1
@@ -335,6 +441,9 @@ public class MainActivity extends AppCompatActivity {
                            } else if (player1VideoView != null) {
                                player1VideoView.setPreferredDevice(player1SelectedDevice);
                            }
+
+                           // 更新音量条以反映当前设备的音量
+                           updateVolumeBarForDevice(player1VolumeBar, player1SelectedDevice);
                        }
                    });
 
@@ -347,8 +456,7 @@ public class MainActivity extends AppCompatActivity {
             // 获取可用的音频输出设备
             List<AudioDeviceInfo> devices = getAvailableOutputDevices();
 
-            if (devices.isEmpty() && player2DeviceButton != null) {
-                player2DeviceButton.setText(R.string.device_default);
+            if (devices.isEmpty()) {
                 return;
             }
 
@@ -368,7 +476,8 @@ public class MainActivity extends AppCompatActivity {
                        public void onClick(DialogInterface dialog, int which) {
                            player2SelectedDevice = deviceArray[which];
                            if (player2DeviceButton != null) {
-                               player2DeviceButton.setText("设备: " + getDeviceName(player2SelectedDevice));
+                               player2DeviceButton.setText(getDeviceName(player2SelectedDevice));
+                               player2DeviceButton.setContentDescription("设备: " + getDeviceName(player2SelectedDevice));
                            }
 
                            // 应用到Player 2
@@ -377,10 +486,56 @@ public class MainActivity extends AppCompatActivity {
                            } else if (player2VideoView != null) {
                                player2VideoView.setPreferredDevice(player2SelectedDevice);
                            }
+
+                           // 更新音量条以反映当前设备的音量
+                           updateVolumeBarForDevice(player2VolumeBar, player2SelectedDevice);
                        }
                    });
 
             builder.create().show();
+        }
+    }
+
+    // 更新音量条以匹配当前设备的音量
+    private void updateVolumeBarForDevice(SeekBar volumeBar, AudioDeviceInfo device) {
+        if (volumeBar == null || device == null) return;
+
+        try {
+            // 通过反射获取设备特定音量
+            Class<?> audioServiceClass = Class.forName("android.media.IAudioService");
+            Class<?> serviceManagerClass = Class.forName("android.os.ServiceManager");
+
+            Method getServiceMethod = serviceManagerClass.getMethod("getService", String.class);
+            Object audioService = getServiceMethod.invoke(null, Context.AUDIO_SERVICE);
+
+            if (audioService != null) {
+                Method getDeviceVolumeMethod = audioServiceClass.getMethod(
+                    "getDeviceVolume",
+                    int.class,  // streamType
+                    int.class,  // device
+                    String.class // packageName
+                );
+
+                Integer deviceVolume = (Integer) getDeviceVolumeMethod.invoke(
+                    audioService,
+                    AudioManager.STREAM_MUSIC,
+                    device.getId(),
+                    getPackageName()
+                );
+
+                if (deviceVolume != null) {
+                    int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    int volumePercent = (int) (((float) deviceVolume / maxVolume) * 100);
+                    volumeBar.setProgress(volumePercent);
+                }
+            }
+        } catch (Exception e) {
+            Log.e("MPDemo", "获取设备音量失败: " + e.getMessage());
+            // 使用默认音量作为备选方案
+            int currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC);
+            int maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+            int percentVolume = (int) (((float) currentVolume / maxVolume) * 100);
+            volumeBar.setProgress(percentVolume);
         }
     }
 
@@ -549,20 +704,62 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void stopPlayer1() {
+        if (player1MediaPlayer != null) {
+            player1MediaPlayer.stop();
+            player1MediaPlayer.release();
+            player1MediaPlayer = null;
+        }
+        if (player1VideoView != null) {
+            player1VideoView.stopPlayback();
+        }
+        isPlayer1Playing = false;
+        if (player1PlayPauseButton != null) {
+            player1PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+        }
+
+        // 停止黑胶旋转并隐藏视图
+        player1RecordView.stopRotation();
+        player1AlbumArt.setVisibility(View.GONE);
+        player1RecordView.setVisibility(View.GONE);
+    }
+
+    private void stopPlayer2() {
+        if (player2MediaPlayer != null) {
+            player2MediaPlayer.stop();
+            player2MediaPlayer.release();
+            player2MediaPlayer = null;
+        }
+        if (player2VideoView != null) {
+            player2VideoView.stopPlayback();
+        }
+        isPlayer2Playing = false;
+        if (player2PlayPauseButton != null) {
+            player2PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+        }
+
+        // 停止黑胶旋转并隐藏视图
+        player2RecordView.stopRotation();
+        player2AlbumArt.setVisibility(View.GONE);
+        player2RecordView.setVisibility(View.GONE);
+    }
+
     private void resumePlayer1FromPosition(int position) {
         if (player1MediaPlayer != null) {
             player1MediaPlayer.seekTo(position);
             player1MediaPlayer.start();
             isPlayer1Playing = true;
+
             if (player1PlayPauseButton != null) {
-                player1PlayPauseButton.setText(R.string.pause);
+                player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
             }
         } else if (player1VideoView != null) {
             player1VideoView.seekTo(position);
             player1VideoView.start();
             isPlayer1Playing = true;
+
             if (player1PlayPauseButton != null) {
-                player1PlayPauseButton.setText(R.string.pause);
+                player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
             }
         }
     }
@@ -572,15 +769,17 @@ public class MainActivity extends AppCompatActivity {
             player2MediaPlayer.seekTo(position);
             player2MediaPlayer.start();
             isPlayer2Playing = true;
+
             if (player2PlayPauseButton != null) {
-                player2PlayPauseButton.setText(R.string.pause);
+                player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
             }
         } else if (player2VideoView != null) {
             player2VideoView.seekTo(position);
             player2VideoView.start();
             isPlayer2Playing = true;
+
             if (player2PlayPauseButton != null) {
-                player2PlayPauseButton.setText(R.string.pause);
+                player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
             }
         }
     }
@@ -626,7 +825,7 @@ public class MainActivity extends AppCompatActivity {
                                 isPlayer2Playing = true;
                             }
                             if (player2PlayPauseButton != null) {
-                                player2PlayPauseButton.setText(R.string.pause);
+                                player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
                             }
                         });
                     }
@@ -654,7 +853,7 @@ public class MainActivity extends AppCompatActivity {
                                 isPlayer1Playing = true;
                             }
                             if (player1PlayPauseButton != null) {
-                                player1PlayPauseButton.setText(R.string.pause);
+                                player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
                             }
                         });
                     }
@@ -794,6 +993,13 @@ public class MainActivity extends AppCompatActivity {
         Log.d("MPDemo", "Player1 开始播放视频: " + videoUri.toString());
         player1CurrentMediaUri = videoUri;
         player1VideoView.setVisibility(View.VISIBLE); // 确保视频视图可见
+
+        // 隐藏专辑封面和黑胶唱片视图，因为正在播放视频
+        player1AlbumArt.setVisibility(View.GONE);
+        player1RecordView.setVisibility(View.GONE);
+        // 停止黑胶唱片旋转动画
+        player1RecordView.stopRotation();
+
         player1VideoView.setVideoURI(videoUri);
 
         // 设置循环播放
@@ -820,11 +1026,16 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
+                    // 应用之前保存的音量设置
+                    float volume = player1Volume / 100.0f;
+                    player1VideoView.setVideoVolume(volume);
+                    Log.d("MPDemo", "Player1 循环播放时重新应用音量: " + player1Volume + "%");
+
                     player1VideoView.start(); // 重新开始播放
                     Log.d("MPDemo", "Player1 循环播放已启动");
                 } else {
                     if (player1PlayPauseButton != null) {
-                        player1PlayPauseButton.setText(R.string.play);
+                        player1PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
                     }
                     handler.removeCallbacks(updateSeekBars); // 停止更新进度条
                     Log.d("MPDemo", "Player1 播放完成，未启用循环");
@@ -855,10 +1066,15 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
+                // 应用之前保存的音量设置
+                float volume = player1Volume / 100.0f;
+                player1VideoView.setVideoVolume(volume);
+                Log.d("MPDemo", "Player1 视频音量设置为: " + player1Volume + "%");
+
                 player1VideoView.start();
                 isPlayer1Playing = true;
                 if (player1PlayPauseButton != null) {
-                    player1PlayPauseButton.setText(R.string.pause);
+                    player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
                 }
 
                 // 开始更新进度条
@@ -876,6 +1092,13 @@ public class MainActivity extends AppCompatActivity {
         Log.d("MPDemo", "Player2 开始播放视频: " + videoUri.toString());
         player2CurrentMediaUri = videoUri;
         player2VideoView.setVisibility(View.VISIBLE); // 确保视频视图可见
+
+        // 隐藏专辑封面和黑胶唱片视图，因为正在播放视频
+        player2AlbumArt.setVisibility(View.GONE);
+        player2RecordView.setVisibility(View.GONE);
+        // 停止黑胶唱片旋转动画
+        player2RecordView.stopRotation();
+
         player2VideoView.setVideoURI(videoUri);
 
         // 设置循环播放
@@ -902,11 +1125,16 @@ public class MainActivity extends AppCompatActivity {
                         }
                     }
 
+                    // 应用之前保存的音量设置
+                    float volume = player2Volume / 100.0f;
+                    player2VideoView.setVideoVolume(volume);
+                    Log.d("MPDemo", "Player2 循环播放时重新应用音量: " + player2Volume + "%");
+
                     player2VideoView.start(); // 重新开始播放
                     Log.d("MPDemo", "Player2 循环播放已启动");
                 } else {
                     if (player2PlayPauseButton != null) {
-                        player2PlayPauseButton.setText(R.string.play);
+                        player2PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
                     }
                     handler.removeCallbacks(updateSeekBars); // 停止更新进度条
                     Log.d("MPDemo", "Player2 播放完成，未启用循环");
@@ -937,10 +1165,15 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
 
+                // 应用之前保存的音量设置
+                float volume = player2Volume / 100.0f;
+                player2VideoView.setVideoVolume(volume);
+                Log.d("MPDemo", "Player2 视频音量设置为: " + player2Volume + "%");
+
                 player2VideoView.start();
                 isPlayer2Playing = true;
                 if (player2PlayPauseButton != null) {
-                    player2PlayPauseButton.setText(R.string.pause);
+                    player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
                 }
 
                 // 开始更新进度条
@@ -962,6 +1195,21 @@ public class MainActivity extends AppCompatActivity {
         // 隐藏Player 1的视频视图，因为正在播放音频
         if (player1VideoView != null) {
             player1VideoView.setVisibility(View.GONE);
+        }
+
+        // 显示专辑封面或黑胶唱片
+        Bitmap albumArt = extractAlbumArt(audioUri);
+        if (albumArt != null) {
+            // 有专辑封面，显示在ImageView上
+            player1AlbumArt.setImageBitmap(albumArt);
+            player1AlbumArt.setVisibility(View.VISIBLE);
+            player1RecordView.setVisibility(View.GONE);
+        } else {
+            // 没有专辑封面，显示黑胶唱片效果
+            player1AlbumArt.setVisibility(View.GONE);
+            player1RecordView.setAlbumArt(BitmapFactory.decodeResource(getResources(), R.drawable.ic_audio_device));
+            player1RecordView.setVisibility(View.VISIBLE);
+            player1RecordView.startRotation();
         }
 
         // 释放之前的Player1的MediaPlayer实例
@@ -994,10 +1242,15 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onPrepared(MediaPlayer mp) {
                     Log.d("MPDemo", "Player1 音频准备就绪");
+                    // 应用之前保存的音量设置
+                    float volume = player1Volume / 100.0f;
+                    mp.setVolume(volume, volume);
+                    Log.d("MPDemo", "Player1 音频音量设置为: " + player1Volume + "%");
+
                     mp.start();
                     isPlayer1Playing = true;
                     if (player1PlayPauseButton != null) {
-                        player1PlayPauseButton.setText(R.string.pause);
+                        player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
                     }
 
                     // 开始更新进度条
@@ -1021,15 +1274,21 @@ public class MainActivity extends AppCompatActivity {
                         }
 
                         // 手动循环播放
-                        mp.seekTo(0); // 回到开头
+                        mp.seekTo(0); // 重新定位到开始位置
                         mp.start();   // 重新开始播放
                         Log.d("MPDemo", "Player1 循环播放已启动");
                     } else {
                         isPlayer1Playing = false;
                         if (player1PlayPauseButton != null) {
-                            player1PlayPauseButton.setText(R.string.play);
+                            player1PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
                         }
                         handler.removeCallbacks(updateSeekBars); // 停止更新进度条
+
+                        // 停止黑胶旋转并隐藏视图
+                        player1RecordView.stopRotation();
+                        player1AlbumArt.setVisibility(View.GONE);
+                        player1RecordView.setVisibility(View.GONE);
+
                         Log.d("MPDemo", "Player1 音频播放完成，未启用循环");
                     }
                 }
@@ -1039,13 +1298,22 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public boolean onError(MediaPlayer mp, int what, int extra) {
                     Log.e("MPDemo", "Player1 播放错误: what=" + what + ", extra=" + extra);
-                    handler.removeCallbacks(updateSeekBars); // 停止更新进度条
+                    //TODO: 处理播放错误
+                    // handler.removeCallbacks(updateSeekBars); // 停止更新进度条
+                    // // 停止黑胶旋转并隐藏视图
+                    // player1RecordView.stopRotation();
+                    // player1AlbumArt.setVisibility(View.GONE);
+                    // player1RecordView.setVisibility(View.GONE);
                     return false;
                 }
             });
         } catch (IOException e) {
             Log.e("MPDemo", "Player1 设置音频数据源失败: " + e.getMessage());
             e.printStackTrace();
+            // 停止黑胶旋转并隐藏视图
+            player1RecordView.stopRotation();
+            player1AlbumArt.setVisibility(View.GONE);
+            player1RecordView.setVisibility(View.GONE);
         }
     }
 
@@ -1057,6 +1325,21 @@ public class MainActivity extends AppCompatActivity {
         // 隐藏Player 2的视频视图，因为正在播放音频
         if (player2VideoView != null) {
             player2VideoView.setVisibility(View.GONE);
+        }
+
+        // 显示专辑封面或黑胶唱片
+        Bitmap albumArt = extractAlbumArt(audioUri);
+        if (albumArt != null) {
+            // 有专辑封面，显示在ImageView上
+            player2AlbumArt.setImageBitmap(albumArt);
+            player2AlbumArt.setVisibility(View.VISIBLE);
+            player2RecordView.setVisibility(View.GONE);
+        } else {
+            // 没有专辑封面，显示黑胶唱片效果
+            player2AlbumArt.setVisibility(View.GONE);
+            player2RecordView.setAlbumArt(BitmapFactory.decodeResource(getResources(), R.drawable.ic_audio_device));
+            player2RecordView.setVisibility(View.VISIBLE);
+            player2RecordView.startRotation();
         }
 
         // 释放之前的Player2的MediaPlayer实例
@@ -1089,10 +1372,15 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public void onPrepared(MediaPlayer mp) {
                     Log.d("MPDemo", "Player2 音频准备就绪");
+                    // 应用之前保存的音量设置
+                    float volume = player2Volume / 100.0f;
+                    mp.setVolume(volume, volume);
+                    Log.d("MPDemo", "Player2 音频音量设置为: " + player2Volume + "%");
+
                     mp.start();
                     isPlayer2Playing = true;
                     if (player2PlayPauseButton != null) {
-                        player2PlayPauseButton.setText(R.string.pause);
+                        player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
                     }
 
                     // 开始更新进度条
@@ -1122,9 +1410,15 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         isPlayer2Playing = false;
                         if (player2PlayPauseButton != null) {
-                            player2PlayPauseButton.setText(R.string.play);
+                            player2PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
                         }
                         handler.removeCallbacks(updateSeekBars); // 停止更新进度条
+
+                        // 停止黑胶旋转并隐藏视图
+                        player2RecordView.stopRotation();
+                        player2AlbumArt.setVisibility(View.GONE);
+                        player2RecordView.setVisibility(View.GONE);
+
                         Log.d("MPDemo", "Player2 音频播放完成，未启用循环");
                     }
                 }
@@ -1134,13 +1428,22 @@ public class MainActivity extends AppCompatActivity {
                 @Override
                 public boolean onError(MediaPlayer mp, int what, int extra) {
                     Log.e("MPDemo", "Player2 播放错误: what=" + what + ", extra=" + extra);
-                    handler.removeCallbacks(updateSeekBars); // 停止更新进度条
+                    //TODO: 处理播放错误
+                    // handler.removeCallbacks(updateSeekBars); // 停止更新进度条
+                    // // 停止黑胶旋转并隐藏视图
+                    // player2RecordView.stopRotation();
+                    // player2AlbumArt.setVisibility(View.GONE);
+                    // player2RecordView.setVisibility(View.GONE);
                     return false;
                 }
             });
         } catch (IOException e) {
             Log.e("MPDemo", "Player2 设置音频数据源失败: " + e.getMessage());
             e.printStackTrace();
+            // 停止黑胶旋转并隐藏视图
+            player2RecordView.stopRotation();
+            player2AlbumArt.setVisibility(View.GONE);
+            player2RecordView.setVisibility(View.GONE);
         }
     }
 
@@ -1148,22 +1451,43 @@ public class MainActivity extends AppCompatActivity {
         if (isPlayer1Playing) {
             if (player1MediaPlayer != null) {
                 player1MediaPlayer.pause();
+                isPlayer1Playing = false;
+
+                if (player1PlayPauseButton != null) {
+                    player1PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+                }
             } else if (player1VideoView != null) {
                 player1VideoView.pause();
-            }
-            isPlayer1Playing = false;
-            if (player1PlayPauseButton != null) {
-                player1PlayPauseButton.setText(R.string.play);
+                isPlayer1Playing = false;
+
+                if (player1PlayPauseButton != null) {
+                    player1PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+                }
             }
         } else {
+            // 检查当前是否正在播放音频
             if (player1MediaPlayer != null) {
+                // 如果当前是音频播放，检查是否需要显示黑胶唱片
+                if (player1AlbumArt.getVisibility() == View.GONE && player1RecordView.getVisibility() == View.VISIBLE) {
+                    // 如果正在显示黑胶唱片，需要确保它在继续播放时仍在旋转
+                    player1RecordView.startRotation();
+                }
+
                 player1MediaPlayer.start();
+                isPlayer1Playing = true;
+
+                // 更新播放按钮图标
+                if (player1PlayPauseButton != null) {
+                    player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                }
             } else if (player1VideoView != null) {
                 player1VideoView.start();
-            }
-            isPlayer1Playing = true;
-            if (player1PlayPauseButton != null) {
-                player1PlayPauseButton.setText(R.string.pause);
+                isPlayer1Playing = true;
+
+                // 更新播放按钮图标
+                if (player1PlayPauseButton != null) {
+                    player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                }
             }
         }
     }
@@ -1172,62 +1496,147 @@ public class MainActivity extends AppCompatActivity {
         if (isPlayer2Playing) {
             if (player2MediaPlayer != null) {
                 player2MediaPlayer.pause();
+                isPlayer2Playing = false;
+
+                if (player2PlayPauseButton != null) {
+                    player2PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+                }
             } else if (player2VideoView != null) {
                 player2VideoView.pause();
-            }
-            isPlayer2Playing = false;
-            if (player2PlayPauseButton != null) {
-                player2PlayPauseButton.setText(R.string.play);
+                isPlayer2Playing = false;
+
+                if (player2PlayPauseButton != null) {
+                    player2PlayPauseButton.setImageResource(R.drawable.ic_play_arrow);
+                }
             }
         } else {
+            // 检查当前是否正在播放音频
             if (player2MediaPlayer != null) {
+                // 如果当前是音频播放，检查是否需要显示黑胶唱片
+                if (player2AlbumArt.getVisibility() == View.GONE && player2RecordView.getVisibility() == View.VISIBLE) {
+                    // 如果正在显示黑胶唱片，需要确保它在继续播放时仍在旋转
+                    player2RecordView.startRotation();
+                }
+
                 player2MediaPlayer.start();
+                isPlayer2Playing = true;
+
+                // 更新播放按钮图标
+                if (player2PlayPauseButton != null) {
+                    player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                }
             } else if (player2VideoView != null) {
                 player2VideoView.start();
-            }
-            isPlayer2Playing = true;
-            if (player2PlayPauseButton != null) {
-                player2PlayPauseButton.setText(R.string.pause);
+                isPlayer2Playing = true;
+
+                // 更新播放按钮图标
+                if (player2PlayPauseButton != null) {
+                    player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                }
             }
         }
     }
 
     private void updatePlayer1SeekBar() {
-        if (player1MediaPlayer != null) {
-            int currentPosition = player1MediaPlayer.getCurrentPosition();
-            int totalDuration = player1MediaPlayer.getDuration();
-
-            if (totalDuration > 0) {
-                int progress = (int) (((float) currentPosition / totalDuration) * 100);
-                player1SeekBar.setProgress(progress);
-            }
-        } else if (player1VideoView != null && player1VideoView.isPlaying()) {
+        // 检查VideoView是否正在播放，如果正在播放则更新进度条
+        if (player1VideoView != null && player1VideoView.isPlaying()) {
             int currentPosition = player1VideoView.getCurrentPosition();
             int totalDuration = player1VideoView.getDuration();
 
             if (totalDuration > 0) {
-                int progress = (int) (((float) currentPosition / totalDuration) * 100);
+                int progress = (currentPosition * 100) / totalDuration;
                 player1SeekBar.setProgress(progress);
+
+                // 如果当前播放位置到达末尾，且开启了循环播放，则重新开始播放
+                if (currentPosition >= totalDuration - 1000 && isPlayer1Looping) { // -1000ms容差
+                    player1VideoView.seekTo(0); // 重新定位到开始位置
+                    player1VideoView.start(); // 开始播放
+
+                    // 更新播放状态
+                    isPlayer1Playing = true;
+
+                    // 更新按钮图标为暂停
+                    if (player1PlayPauseButton != null) {
+                        player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                    }
+                }
+            }
+        }
+
+        // 对于MediaPlayer的情况
+        if (player1MediaPlayer != null && player1MediaPlayer.isPlaying()) {
+            int currentPosition = player1MediaPlayer.getCurrentPosition();
+            int totalDuration = player1MediaPlayer.getDuration();
+
+            if (totalDuration > 0) {
+                int progress = (currentPosition * 100) / totalDuration;
+                player1SeekBar.setProgress(progress);
+
+                // 如果当前播放位置到达末尾，且开启了循环播放，则重新开始播放
+                if (currentPosition >= totalDuration - 1000 && isPlayer1Looping) { // -1000ms容差
+                    player1MediaPlayer.seekTo(0); // 重新定位到开始位置
+                    player1MediaPlayer.start(); // 开始播放
+
+                    // 更新播放状态
+                    isPlayer1Playing = true;
+
+                    // 更新按钮图标为暂停
+                    if (player1PlayPauseButton != null) {
+                        player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                    }
+                }
             }
         }
     }
 
     private void updatePlayer2SeekBar() {
-        if (player2MediaPlayer != null) {
-            int currentPosition = player2MediaPlayer.getCurrentPosition();
-            int totalDuration = player2MediaPlayer.getDuration();
-
-            if (totalDuration > 0) {
-                int progress = (int) (((float) currentPosition / totalDuration) * 100);
-                player2SeekBar.setProgress(progress);
-            }
-        } else if (player2VideoView != null && player2VideoView.isPlaying()) {
+        // 检查VideoView是否正在播放，如果正在播放则更新进度条
+        if (player2VideoView != null && player2VideoView.isPlaying()) {
             int currentPosition = player2VideoView.getCurrentPosition();
             int totalDuration = player2VideoView.getDuration();
 
             if (totalDuration > 0) {
-                int progress = (int) (((float) currentPosition / totalDuration) * 100);
+                int progress = (currentPosition * 100) / totalDuration;
                 player2SeekBar.setProgress(progress);
+
+                // 如果当前播放位置到达末尾，且开启了循环播放，则重新开始播放
+                if (currentPosition >= totalDuration - 1000 && isPlayer2Looping) { // -1000ms容差
+                    player2VideoView.seekTo(0); // 重新定位到开始位置
+                    player2VideoView.start(); // 开始播放
+
+                    // 更新播放状态
+                    isPlayer2Playing = true;
+
+                    // 更新按钮图标为暂停
+                    if (player2PlayPauseButton != null) {
+                        player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                    }
+                }
+            }
+        }
+
+        // 对于MediaPlayer的情况
+        if (player2MediaPlayer != null && player2MediaPlayer.isPlaying()) {
+            int currentPosition = player2MediaPlayer.getCurrentPosition();
+            int totalDuration = player2MediaPlayer.getDuration();
+
+            if (totalDuration > 0) {
+                int progress = (currentPosition * 100) / totalDuration;
+                player2SeekBar.setProgress(progress);
+
+                // 如果当前播放位置到达末尾，且开启了循环播放，则重新开始播放
+                if (currentPosition >= totalDuration - 1000 && isPlayer2Looping) { // -1000ms容差
+                    player2MediaPlayer.seekTo(0); // 重新定位到开始位置
+                    player2MediaPlayer.start(); // 开始播放
+
+                    // 更新播放状态
+                    isPlayer2Playing = true;
+
+                    // 更新按钮图标为暂停
+                    if (player2PlayPauseButton != null) {
+                        player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
+                    }
+                }
             }
         }
     }
@@ -1317,6 +1726,75 @@ public class MainActivity extends AppCompatActivity {
         }
         if (player2VideoView != null) {
             player2VideoView.stopPlayback();
+        }
+    }
+
+    /**
+     * 从音频文件中提取专辑封面
+     */
+    private Bitmap extractAlbumArt(Uri uri) {
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        try {
+            // 根据Uri的scheme决定如何设置数据源
+            if (uri.toString().startsWith("content")) {
+                retriever.setDataSource(this, uri);
+            } else {
+                // 如果是文件路径
+                retriever.setDataSource(uri.getPath());
+            }
+
+            byte[] albumArtData = retriever.getEmbeddedPicture();
+            if (albumArtData != null) {
+                return BitmapFactory.decodeByteArray(albumArtData, 0, albumArtData.length);
+            }
+        } catch (Exception e) {
+            Log.e("MPDemo", "提取专辑封面失败: " + e.getMessage());
+            e.printStackTrace();
+        } finally {
+            try {
+                retriever.release();
+            } catch (Exception e) {
+                Log.e("MPDemo", "释放MediaMetadataRetriever失败: " + e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    private void startPlayer1Playback() {
+        // 检查MediaPlayer是否准备好播放
+        if (player1IsPrepared) {
+            // 更新播放状态为正在播放
+            isPlayer1Playing = true;
+
+            if (player1MediaPlayer != null) {
+                player1MediaPlayer.start();
+            } else if (player1VideoView != null) {
+                player1VideoView.start();
+            }
+
+            // 更新按钮图标为暂停
+            if (player1PlayPauseButton != null) {
+                player1PlayPauseButton.setImageResource(R.drawable.ic_pause);
+            }
+        }
+    }
+
+    private void startPlayer2Playback() {
+        // 检查MediaPlayer是否准备好播放
+        if (player2IsPrepared) {
+            // 更新播放状态为正在播放
+            isPlayer2Playing = true;
+
+            if (player2MediaPlayer != null) {
+                player2MediaPlayer.start();
+            } else if (player2VideoView != null) {
+                player2VideoView.start();
+            }
+
+            // 更新按钮图标为暂停
+            if (player2PlayPauseButton != null) {
+                player2PlayPauseButton.setImageResource(R.drawable.ic_pause);
+            }
         }
     }
 }

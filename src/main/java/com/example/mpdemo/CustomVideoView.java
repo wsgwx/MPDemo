@@ -45,7 +45,7 @@ public class CustomVideoView extends VideoView {
             Field field = VideoView.class.getDeclaredField("mMediaPlayer");
             field.setAccessible(true);
             MediaPlayer mediaPlayer = (MediaPlayer) field.get(this);
-            
+
             if (mediaPlayer != null) {
                 boolean success = mediaPlayer.setPreferredDevice(deviceInfo);
                 Log.d("CustomVideoView", "setPreferredDevice " + (success ? "成功" : "失败"));
@@ -54,6 +54,26 @@ public class CustomVideoView extends VideoView {
             }
         } catch (Exception e) {
             Log.e("CustomVideoView", "设置首选设备失败: " + e.getMessage());
+        }
+    }
+
+    // 设置视频音量
+    public void setVideoVolume(float volume) {
+        try {
+            // 使用反射获取内部MediaPlayer实例
+            Field field = VideoView.class.getDeclaredField("mMediaPlayer");
+            field.setAccessible(true);
+            MediaPlayer mediaPlayer = (MediaPlayer) field.get(this);
+
+            if (mediaPlayer != null) {
+                // 设置音量 (左右声道相同)
+                mediaPlayer.setVolume(volume, volume);
+                Log.d("CustomVideoView", "成功设置内部MediaPlayer音量: " + volume);
+            } else {
+                Log.w("CustomVideoView", "内部MediaPlayer为null，无法设置音量");
+            }
+        } catch (Exception e) {
+            Log.e("CustomVideoView", "设置视频音量失败: " + e.getMessage());
         }
     }
 }

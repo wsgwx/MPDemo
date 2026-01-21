@@ -17,10 +17,9 @@
 android_app {
     name: "MPDemo",
     manifest: "src/main/AndroidManifest.xml",
-    
+
     srcs: [
-        "src/main/java/com/example/mpdemo/MainActivity.java",
-        "src/main/java/com/example/mpdemo/CustomVideoView.java",
+        "src/main/java/com/example/mpdemo/*.java",
     ],
     resource_dirs: ["src/main/res"],
     // 使用SDK API 构建应用，保证跨版本兼容性

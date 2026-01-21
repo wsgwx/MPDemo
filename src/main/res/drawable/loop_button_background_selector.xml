@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 循环按钮背景选择器 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#4CAF50" />  <!-- 绿色表示开启状态 -->
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#E0E0E0" />  <!-- 灰色表示关闭状态 -->
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</selector>

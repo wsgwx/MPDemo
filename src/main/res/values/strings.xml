@@ -22,7 +22,7 @@
     <string name="pause">暂停</string>
     <string name="loop_on">循环: 开</string>
     <string name="loop_off">循环: 关</string>
-    <string name="device_default">设备: 默认</string>
+    <string name="device_default">默认</string>
     <string name="device_speaker">扬声器</string>
     <string name="device_headphone">耳机</string>
     <string name="device_bluetooth">蓝牙</string>

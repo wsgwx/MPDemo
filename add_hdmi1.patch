@@ -1,0 +1,27 @@
+diff --git a/src/main/java/com/example/mpdemo/MainActivity.java b/src/main/java/com/example/mpdemo/MainActivity.java
+index a30b23e..0949566 100644
+--- a/src/main/java/com/example/mpdemo/MainActivity.java
++++ b/src/main/java/com/example/mpdemo/MainActivity.java
+@@ -412,6 +412,8 @@ public class MainActivity extends AppCompatActivity {
+             return getString(R.string.device_bluetooth);
+         } else if (deviceInfo.getType() == AudioDeviceInfo.TYPE_HDMI) {
+             return getString(R.string.device_hdmi);
++        } else if (deviceInfo.getType() == AudioDeviceInfo.TYPE_VX_HDMI0) {
++            return getString(R.string.device_hdmi_1);
+         } else if (deviceInfo.getType() == AudioDeviceInfo.TYPE_USB_HEADSET ||
+                    deviceInfo.getType() == AudioDeviceInfo.TYPE_USB_DEVICE) {
+             return getString(R.string.device_usb);
+diff --git a/src/main/res/values/strings.xml b/src/main/res/values/strings.xml
+index 223cfe1..985bb40 100644
+--- a/src/main/res/values/strings.xml
++++ b/src/main/res/values/strings.xml
+@@ -26,6 +26,7 @@
+     <string name="device_speaker">扬声器</string>
+     <string name="device_headphone">耳机</string>
+     <string name="device_bluetooth">蓝牙</string>
+-    <string name="device_hdmi">HDMI</string>
++    <string name="device_hdmi">HDMI0</string>
++    <string name="device_hdmi_1">HDMI1</string>
+     <string name="device_usb">USB</string>
+ </resources>
+\ No newline at end of file
